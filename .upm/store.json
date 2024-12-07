@@ -1,0 +1,1 @@
+{"version":2,"languages":{"nodejs-npm":{"specfileHash":"1ec5fbaaab545e438dbf24f72515170f","lockfileHash":"cf8064988fc56d9a8ea0b7473d9465e1","guessedImports":["@langchain/openai","@coinbase/cdp-agentkit-core","@langchain/core","@coinbase/cdp-langchain","dotenv","@langchain/langgraph"],"guessedImportsHash":"82616453a521e8c6b5368ee4297dcc36"}}}

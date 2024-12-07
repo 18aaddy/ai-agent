@@ -1,12 +1,14 @@
-import * as fs from "fs";
-import { ChatOpenAI } from "@langchain/openai";
+import { CdpAgentkit, TransferAction } from "@coinbase/cdp-agentkit-core";
+import { CdpToolkit } from "@coinbase/cdp-langchain";
 import { HumanMessage } from "@langchain/core/messages";
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { MemorySaver } from "@langchain/langgraph";
-import { CdpAgent } from "@coinbase/cdp-langchain";
-import { AgentKit } from "@coinbase/cdp-agentkit-core";
+import { createReactAgent } from "@langchain/langgraph/prebuilt";
+import { ChatOpenAI } from "@langchain/openai";
+import {Wallet} from "@coinbase/coinbase-sdk";
 import * as dotenv from "dotenv";
+import * as fs from "fs";
 import * as readline from "readline";
+import { transfer } from "@coinbase/cdp-agentkit-core/dist/actions/cdp/transfer";
 
 dotenv.config();
 
@@ -60,7 +62,7 @@ async function initializeAgent() {
       model: "grok-beta",
       apiKey: process.env.XAI_API_KEY,
       configuration: {
-        baseURL: "https://api.x.ai/v1",
+        baseURL: "https://api.x.ai/v1"
       }
     });
 
@@ -82,12 +84,11 @@ async function initializeAgent() {
       networkId: process.env.NETWORK_ID || "base-sepolia",
     };
 
-    // Initialize CDP AgentKit
-    const agentKit = await AgentKit.create(config);
-
-    // Initialize CDP Agent and get tools
-    const cdpAgent = new CdpAgent(agentKit);
-    const tools = cdpAgent.getTools();
+    // Initialize CDP agentkit
+    const agentkit = await CdpAgentkit.configureWithWallet(config);
+    // Initialize CDP Agentkit Toolkit and get tools
+    const cdpToolkit = new CdpToolkit(agentkit);
+    const tools = cdpToolkit.getTools();
 
     // Store buffered conversation history in memory
     const memory = new MemorySaver();
@@ -103,7 +104,20 @@ async function initializeAgent() {
     });
 
     // Save wallet data
-    const exportedWallet = await agentKit.exportWallet();
+    const exportedWallet = await agentkit.exportWallet();
+    // console.log(exportedWallet);
+
+    const data = JSON.parse(exportedWallet);
+
+    // Extract the defaultAddressId
+    const walletId = data.walletId;
+
+    var wallet = await Wallet.fetch(walletId) 
+
+    const faucet = await wallet.faucet();
+
+    // console.log("Faucet Transaction: ", faucet.getTransactionHash())
+
     fs.writeFileSync(WALLET_DATA_FILE, exportedWallet);
 
     return { agent, config: agentConfig };
@@ -120,11 +134,9 @@ async function initializeAgent() {
  * @param config - Agent configuration
  * @param interval - Time interval between actions in seconds
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function runAutonomousMode(agent: any, config: any, interval = 10) {
   console.log("Starting autonomous mode...");
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
       const thought =
@@ -158,7 +170,6 @@ async function runAutonomousMode(agent: any, config: any, interval = 10) {
  * @param agent - The agent executor
  * @param config - Agent configuration
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function runChatMode(agent: any, config: any) {
   console.log("Starting chat mode... Type 'exit' to end.");
 
@@ -171,7 +182,6 @@ async function runChatMode(agent: any, config: any) {
     new Promise(resolve => rl.question(prompt, resolve));
 
   try {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const userInput = await question("\nPrompt: ");
 
@@ -200,6 +210,64 @@ async function runChatMode(agent: any, config: any) {
   }
 }
 
+// async function setTimer(time: number, amount: number) {
+//   if (time <= 0) {
+//     throw new Error("Interval must be greater than 0");
+//   }
+
+//   const { agent, config, agentkit } = await initializeAgent();
+
+//   // Convert seconds to milliseconds
+//   const intervalInMilliseconds = time * 1000;
+//   const dummy = async function(){}();
+//   // Call transfer every x seconds
+//   setInterval(() => {
+//     console.log(`transfer ${amount} sepolia eth to 0xC368B76F5BcDC2E86EDA0716581A73A5265806fE on Base Sepolia chain`)
+    
+//     // const userInput = `transfer ${amount} sepolia eth to 0xC368B76F5BcDC2E86EDA0716581A73A5265806fE on Base Sepolia chain`;
+
+//     // const stream = agent
+//     // .stream({ messages: [new HumanMessage(userInput)] }, config)
+//     // .then(async (stream) => {
+//     //   for await (const chunk of stream) {
+//     //     if ("agent" in chunk) {
+//     //       console.log(chunk.agent.messages[0].content);
+//     //     } else if ("tools" in chunk) {
+//     //       console.log(chunk.tools.messages[0].content);
+//     //     }
+//     //     console.log("-------------------");
+//     //   }
+//     // })
+//     // .catch((error) => {
+//     //   console.error("Error processing stream:", error, "Stream: ", userInput);
+//     // });
+  
+//   }, intervalInMilliseconds)
+// }
+
+// Function to simulate user input every 10 seconds
+
+const sendPeriodicPrompt = (prompt: string) => {
+  setInterval(async () => {
+    console.log(`\nSending automated prompt: ${prompt}`);
+
+    const { agent, config } = await initializeAgent();
+    
+    const userInput = prompt; // Using predefined prompt as user input
+
+    const stream = await agent.stream({ messages: [new HumanMessage(userInput)] }, config);
+
+    for await (const chunk of stream) {
+      if ("agent" in chunk) {
+        console.log(chunk.agent.messages[0].content);
+      } else if ("tools" in chunk) {
+        console.log(chunk.tools.messages[0].content);
+      }
+      console.log("-------------------");
+    }
+  }, 10000); // 10000ms = 10 seconds
+};
+
 /**
  * Choose whether to run in autonomous or chat mode based on user input
  *
@@ -214,7 +282,6 @@ async function chooseMode(): Promise<"chat" | "auto"> {
   const question = (prompt: string): Promise<string> =>
     new Promise(resolve => rl.question(prompt, resolve));
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     console.log("\nAvailable modes:");
     console.log("1. chat    - Interactive chat mode");
@@ -230,6 +297,11 @@ async function chooseMode(): Promise<"chat" | "auto"> {
     } else if (choice === "2" || choice === "auto") {
       rl.close();
       return "auto";
+    } else if (choice === "10,0.01") {
+      rl.close();
+      // await setTimer(10, 0.01)
+      sendPeriodicPrompt(`transfer 0.005 eth to 0xC368B76F5BcDC2E86EDA0716581A73A5265806fE on Base Sepolia chain, not a gasless transfer`)
+      return "chat";
     }
     console.log("Invalid choice. Please try again.");
   }

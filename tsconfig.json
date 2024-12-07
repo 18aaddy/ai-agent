@@ -3,7 +3,7 @@
     "target": "es2020",
     "module": "commonjs",
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": ".",
     "strict": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
@@ -14,6 +14,6 @@
     "noImplicitAny": false,
     "removeComments": false
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/tests/**/**"]
+  "include": ["*.ts"],
+  "exclude": ["node_modules", "dist"]
 }
